@@ -34,6 +34,15 @@ canvas { width: 100% !important; height: 100% !important; }
 <body>
 <h1>HDHomeRun FLEX DUO — Tuner 0</h1>
 <div class="conn-status" id="connStatus">Waiting for data…</div>
+<div style="display:flex;gap:8px;margin-bottom:12px;">
+  <input type="text" id="urlDisplay" readonly style="flex:1;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#888;font-size:0.8rem;padding:6px 10px;font-family:monospace;" value="http://hdhomerun.local/tuners.html?page=tuner0">
+  <select id="refreshRate" style="background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#ddd;font-size:0.8rem;padding:6px 8px;font-family:monospace;">
+    <option value="0">Off</option>
+    <option value="1000" selected>1s</option>
+    <option value="2000">2s</option>
+    <option value="5000">5s</option>
+  </select>
+</div>
 <div class="header">
   <div class="stat"><div class="stat-label">Signal Strength</div><div class="stat-value" id="val-strength">—</div></div>
   <div class="stat"><div class="stat-label">Signal Quality</div><div class="stat-value" id="val-quality">—</div></div>
@@ -176,7 +185,7 @@ async function fetchTunerStatus() {
   try {
     const resp = await fetch(TUNER_URL, { signal: AbortSignal.timeout(5000) });
     const html = await resp.text();
-    statusEl.textContent = 'Connected — updating every 1s';
+    statusEl.textContent = 'Connected';
     statusEl.style.color = '#4ade80';
 
     const strength = parseInt(html.match(/Signal Strength.*?(\d+)%/)?.[1]);
@@ -214,8 +223,21 @@ async function fetchTunerStatus() {
   }
 }
 
-fetchTunerStatus();
-setInterval(fetchTunerStatus, 1000);
+let intervalId = null;
+
+function startPolling(ms) {
+  if (intervalId) clearInterval(intervalId);
+  if (ms > 0) {
+    fetchTunerStatus();
+    intervalId = setInterval(fetchTunerStatus, ms);
+  }
+}
+
+document.getElementById('refreshRate').addEventListener('change', function() {
+  startPolling(parseInt(this.value));
+});
+
+startPolling(1000);
 </script>
 </body>
 </html>
