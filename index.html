@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HDHomeRun Tuner Status</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #111;
+  color: #ddd;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  padding: 20px;
+}
+h1 { font-size: 1.4rem; margin-bottom: 12px; color: #fff; }
+.header { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 20px; }
+.stat { background: #1a1a1a; border-radius: 8px; padding: 12px 20px; min-width: 140px; }
+.stat-label { font-size: 0.75rem; text-transform: uppercase; color: #888; }
+.stat-value { font-size: 1.5rem; font-weight: 600; color: #fff; }
+.stat-value.good { color: #4ade80; }
+.stat-value.ok { color: #facc15; }
+.stat-value.bad { color: #f87171; }
+.chart-container { background: #1a1a1a; border-radius: 8px; padding: 16px; position: relative; height: 400px; }
+canvas { width: 100% !important; height: 100% !important; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.conn-status { font-size: 0.8rem; color: #666; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<h1>HDHomeRun FLEX DUO — Tuner 0</h1>
+<div class="conn-status" id="connStatus">Waiting for data…</div>
+<div class="header">
+  <div class="stat"><div class="stat-label">Signal Strength</div><div class="stat-value" id="val-strength">—</div></div>
+  <div class="stat"><div class="stat-label">Signal Quality</div><div class="stat-value" id="val-quality">—</div></div>
+  <div class="stat"><div class="stat-label">Symbol Quality</div><div class="stat-value" id="val-symbol">—</div></div>
+  <div class="stat"><div class="stat-label">Streaming Rate</div><div class="stat-value" id="val-rate">—</div></div>
+  <div class="stat"><div class="stat-label">Channel</div><div class="stat-value" id="val-channel">—</div></div>
+  <div class="stat"><div class="stat-label">Frequency</div><div class="stat-value" id="val-frequency">—</div></div>
+  <div class="stat"><div class="stat-label">Modulation</div><div class="stat-value" id="val-modulation">—</div></div>
+  <div class="stat"><div class="stat-label">Resource Lock</div><div class="stat-value" id="val-resource">—</div></div>
+</div>
+<div class="legend">
+  <span class="legend-item"><span class="legend-dot" style="background:#f87171"></span> Strength</span>
+  <span class="legend-item"><span class="legend-dot" style="background:#4ade80"></span> Quality</span>
+  <span class="legend-item"><span class="legend-dot" style="background:#60a5fa"></span> Symbol</span>
+  <span class="legend-item"><span class="legend-dot" style="background:#c084fc"></span> Rate</span>
+</div>
+<div class="chart-container">
+  <canvas id="chart"></canvas>
+</div>
+
+<script>
+const MAX_POINTS = 120;
+const TUNER_URL = 'http://hdhomerun.local/tuners.html?page=tuner0';
+
+const labels = [];
+const strengthData = [];
+const qualityData = [];
+const symbolData = [];
+const rateData = [];
+
+const ctx = document.getElementById('chart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      {
+        label: 'Signal Strength',
+        data: strengthData,
+        borderColor: '#f87171',
+        backgroundColor: 'rgba(248,113,113,0.1)',
+        yAxisID: 'y',
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+      },
+      {
+        label: 'Signal Quality',
+        data: qualityData,
+        borderColor: '#4ade80',
+        backgroundColor: 'rgba(74,222,128,0.1)',
+        yAxisID: 'y',
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+      },
+      {
+        label: 'Symbol Quality',
+        data: symbolData,
+        borderColor: '#60a5fa',
+        backgroundColor: 'rgba(96,165,250,0.1)',
+        yAxisID: 'y',
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+      },
+      {
+        label: 'Streaming Rate (Mbps)',
+        data: rateData,
+        borderColor: '#c084fc',
+        backgroundColor: 'rgba(192,132,252,0.1)',
+        yAxisID: 'y1',
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+      }
+    ]
+  },
+  options: {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        type: 'time',
+        time: { unit: 'second', displayFormats: { second: 'h:mm:ss a' } },
+        ticks: { color: '#666', maxTicksLimit: 10 },
+        grid: { color: 'rgba(255,255,255,0.04)' },
+      },
+      y: {
+        type: 'linear',
+        min: 0,
+        max: 100,
+        position: 'left',
+        title: { display: true, text: '%', color: '#888' },
+        ticks: { color: '#666', callback: v => v + '%' },
+        grid: { color: 'rgba(255,255,255,0.08)' },
+      },
+      y1: {
+        type: 'linear',
+        min: 0,
+        position: 'right',
+        title: { display: true, text: 'Mbps', color: '#888' },
+        ticks: { color: '#666' },
+        grid: { drawOnChartArea: false },
+      }
+    }
+  }
+});
+
+function pctClass(v) {
+  if (v >= 80) return 'good';
+  if (v >= 50) return 'ok';
+  return 'bad';
+}
+
+function updateStats(strength, quality, symbol, rate, channel, frequency, modulation, resource) {
+  const s = document.getElementById('val-strength');
+  const q = document.getElementById('val-quality');
+  const sy = document.getElementById('val-symbol');
+  const r = document.getElementById('val-rate');
+  s.textContent = strength + '%';
+  s.className = 'stat-value ' + pctClass(strength);
+  q.textContent = quality + '%';
+  q.className = 'stat-value ' + pctClass(quality);
+  sy.textContent = symbol + '%';
+  sy.className = 'stat-value ' + pctClass(symbol);
+  r.textContent = rate + ' Mbps';
+  r.className = 'stat-value';
+  document.getElementById('val-channel').textContent = channel;
+  document.getElementById('val-frequency').textContent = frequency;
+  document.getElementById('val-modulation').textContent = modulation;
+  document.getElementById('val-resource').textContent = resource;
+}
+
+async function fetchTunerStatus() {
+  const statusEl = document.getElementById('connStatus');
+  try {
+    const resp = await fetch(TUNER_URL, { signal: AbortSignal.timeout(5000) });
+    const html = await resp.text();
+    statusEl.textContent = 'Connected — updating every 1s';
+    statusEl.style.color = '#4ade80';
+
+    const strength = parseInt(html.match(/Signal Strength.*?(\d+)%/)?.[1]);
+    const quality = parseInt(html.match(/Signal Quality.*?(\d+)%/)?.[1]);
+    const symbol = parseInt(html.match(/Symbol Quality.*?(\d+)%/)?.[1]);
+    const rateMatch = html.match(/Streaming Rate.*?([\d.]+)\s*Mbps/);
+    const rate = rateMatch ? parseFloat(rateMatch[1]) : 0;
+    const channel = html.match(/Virtual Channel.*?<td>([^<]+)/)?.[1] || '—';
+    const frequency = html.match(/Frequency.*?<td>([^<]+)/)?.[1] || '—';
+    const modulation = html.match(/Modulation Lock.*?<td>([^<]+)/)?.[1] || '—';
+    const resource = html.match(/Resource Lock.*?<td>([^<]+)/)?.[1] || '—';
+
+    if (isNaN(strength) || isNaN(quality) || isNaN(symbol)) return;
+
+    const now = new Date();
+    labels.push(now);
+    strengthData.push(strength);
+    qualityData.push(quality);
+    symbolData.push(symbol);
+    rateData.push(rate);
+
+    if (labels.length > MAX_POINTS) {
+      labels.shift();
+      strengthData.shift();
+      qualityData.shift();
+      symbolData.shift();
+      rateData.shift();
+    }
+
+    updateStats(strength, quality, symbol, rate.toFixed(3), channel, frequency, modulation, resource);
+    chart.update('none');
+  } catch (err) {
+    statusEl.textContent = 'Disconnected — ' + err.message;
+    statusEl.style.color = '#f87171';
+  }
+}
+
+fetchTunerStatus();
+setInterval(fetchTunerStatus, 1000);
+</script>
+</body>
+</html>
