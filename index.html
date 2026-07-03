@@ -32,10 +32,14 @@ canvas { width: 100% !important; height: 100% !important; }
 </style>
 </head>
 <body>
-<h1>HDHomeRun FLEX DUO — Tuner 0</h1>
+<h1>HDHomeRun FLEX DUO — Tuner <span id="tunerLabel">0</span></h1>
 <div class="conn-status" id="connStatus">Waiting for data…</div>
 <div style="display:flex;gap:8px;margin-bottom:12px;">
   <input type="text" id="urlDisplay" readonly style="flex:1;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#888;font-size:0.8rem;padding:6px 10px;font-family:monospace;" value="http://hdhomerun.local/tuners.html?page=tuner0">
+  <select id="tunerSelect" style="background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#ddd;font-size:0.8rem;padding:6px 8px;font-family:monospace;">
+    <option value="0">Tuner 0</option>
+    <option value="1">Tuner 1</option>
+  </select>
   <select id="refreshRate" style="background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#ddd;font-size:0.8rem;padding:6px 8px;font-family:monospace;">
     <option value="0">Off</option>
     <option value="1000" selected>1s</option>
@@ -65,7 +69,10 @@ canvas { width: 100% !important; height: 100% !important; }
 
 <script>
 const MAX_POINTS = 120;
-const TUNER_URL = 'http://hdhomerun.local/tuners.html?page=tuner0';
+
+function tunerUrl() {
+  return 'http://hdhomerun.local/tuners.html?page=tuner' + document.getElementById('tunerSelect').value;
+}
 
 const labels = [];
 const strengthData = [];
@@ -155,6 +162,21 @@ const chart = new Chart(ctx, {
   }
 });
 
+function clearStats() {
+  document.getElementById('val-strength').textContent = '—';
+  document.getElementById('val-strength').className = 'stat-value';
+  document.getElementById('val-quality').textContent = '—';
+  document.getElementById('val-quality').className = 'stat-value';
+  document.getElementById('val-symbol').textContent = '—';
+  document.getElementById('val-symbol').className = 'stat-value';
+  document.getElementById('val-rate').textContent = '—';
+  document.getElementById('val-rate').className = 'stat-value';
+  document.getElementById('val-channel').textContent = '—';
+  document.getElementById('val-frequency').textContent = '—';
+  document.getElementById('val-modulation').textContent = '—';
+  document.getElementById('val-resource').textContent = '—';
+}
+
 function pctClass(v) {
   if (v >= 80) return 'good';
   if (v >= 50) return 'ok';
@@ -183,7 +205,7 @@ function updateStats(strength, quality, symbol, rate, channel, frequency, modula
 async function fetchTunerStatus() {
   const statusEl = document.getElementById('connStatus');
   try {
-    const resp = await fetch(TUNER_URL, { signal: AbortSignal.timeout(5000) });
+    const resp = await fetch(tunerUrl(), { signal: AbortSignal.timeout(5000) });
     const html = await resp.text();
     statusEl.textContent = 'Connected';
     statusEl.style.color = '#4ade80';
@@ -198,7 +220,7 @@ async function fetchTunerStatus() {
     const modulation = html.match(/Modulation Lock.*?<td>([^<]+)/)?.[1] || '—';
     const resource = html.match(/Resource Lock.*?<td>([^<]+)/)?.[1] || '—';
 
-    if (isNaN(strength) || isNaN(quality) || isNaN(symbol)) return;
+    if (isNaN(strength) || isNaN(quality) || isNaN(symbol)) { clearStats(); return; }
 
     const now = new Date();
     labels.push(now);
@@ -235,6 +257,21 @@ function startPolling(ms) {
 
 document.getElementById('refreshRate').addEventListener('change', function() {
   startPolling(parseInt(this.value));
+});
+
+document.getElementById('tunerSelect').addEventListener('change', function() {
+  const n = this.value;
+  document.getElementById('tunerLabel').textContent = n;
+  document.getElementById('urlDisplay').value = tunerUrl();
+  clearStats();
+  labels.length = 0;
+  strengthData.length = 0;
+  qualityData.length = 0;
+  symbolData.length = 0;
+  rateData.length = 0;
+  chart.update('none');
+  const ms = parseInt(document.getElementById('refreshRate').value);
+  startPolling(ms);
 });
 
 startPolling(1000);
